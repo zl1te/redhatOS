@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script para actualizar completamente un sistema Red Hat (RHEL) e instalar herramientas de hacking ético
+# Script para actualizar completamente un sistema e instalar herramientas de hacking ético
 # Autor: Tu Nombre
 # Fecha: YYYY-MM-DD
 
@@ -22,18 +22,26 @@ function log_error() {
     echo "ERROR: $1"
 }
 
-# Paso 1: Configurar repositorios adicionales
-mensaje "Configurando repositorios adicionales..."
-dnf install -y epel-release >> /dev/null 2>&1
-if [ $? -ne 0 ]; then
-    log_error "No se pudo instalar el repositorio EPEL."
-    exit 1
-fi
-
-# Agregar repositorio Copr para herramientas adicionales
-dnf copr enable -y alblue/com.github.alblue >> /dev/null 2>&1
-if [ $? -ne 0 ]; then
-    log_error "No se pudo habilitar el repositorio Copr."
+# Detectar el sistema operativo
+OS=$(cat /etc/os-release | grep ^ID= | cut -d'=' -f2 | tr -d '"')
+if [[ "$OS" == "amzn" ]]; then
+    mensaje "Detectado Amazon Linux. Configurando repositorios específicos..."
+    # Instalar EPEL para Amazon Linux
+    amazon-linux-extras install epel -y >> /dev/null 2>&1
+    if [ $? -ne 0 ]; then
+        log_error "No se pudo instalar el repositorio EPEL para Amazon Linux."
+        exit 1
+    fi
+elif [[ "$OS" == "rhel" || "$OS" == "centos" || "$OS" == "almalinux" || "$OS" == "rocky" ]]; then
+    mensaje "Detectado Red Hat o derivado. Configurando repositorios adicionales..."
+    # Instalar EPEL para RHEL/CentOS/AlmaLinux/Rocky Linux
+    dnf install -y epel-release >> /dev/null 2>&1
+    if [ $? -ne 0 ]; then
+        log_error "No se pudo instalar el repositorio EPEL."
+        exit 1
+    fi
+else
+    log_error "Sistema operativo no compatible: $OS"
     exit 1
 fi
 
