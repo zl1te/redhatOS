@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script para actualizar completamente un sistema e instalar herramientas de hacking ético
+# Script para actualizar completamente un sistema e instalar herramientas de hacking ético sin EPEL
 # Autor: Tu Nombre
 # Fecha: YYYY-MM-DD
 
@@ -22,30 +22,7 @@ function log_error() {
     echo "ERROR: $1"
 }
 
-# Detectar el sistema operativo
-OS=$(cat /etc/os-release | grep ^ID= | cut -d'=' -f2 | tr -d '"')
-if [[ "$OS" == "amzn" ]]; then
-    mensaje "Detectado Amazon Linux. Configurando repositorios específicos..."
-    # Instalar EPEL para Amazon Linux
-    amazon-linux-extras install epel -y >> /dev/null 2>&1
-    if [ $? -ne 0 ]; then
-        log_error "No se pudo instalar el repositorio EPEL para Amazon Linux."
-        exit 1
-    fi
-elif [[ "$OS" == "rhel" || "$OS" == "centos" || "$OS" == "almalinux" || "$OS" == "rocky" ]]; then
-    mensaje "Detectado Red Hat o derivado. Configurando repositorios adicionales..."
-    # Instalar EPEL para RHEL/CentOS/AlmaLinux/Rocky Linux
-    dnf install -y epel-release >> /dev/null 2>&1
-    if [ $? -ne 0 ]; then
-        log_error "No se pudo instalar el repositorio EPEL."
-        exit 1
-    fi
-else
-    log_error "Sistema operativo no compatible: $OS"
-    exit 1
-fi
-
-# Paso 2: Actualizar los repositorios de paquetes
+# Paso 1: Actualizar los repositorios de paquetes
 mensaje "Actualizando los metadatos de los repositorios..."
 dnf makecache --refresh
 if [ $? -ne 0 ]; then
@@ -53,7 +30,7 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Paso 3: Actualizar todos los paquetes instalados
+# Paso 2: Actualizar todos los paquetes instalados
 mensaje "Iniciando la actualización de todos los paquetes..."
 dnf update -y
 if [ $? -ne 0 ]; then
@@ -61,57 +38,59 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Paso 4: Instalar herramientas indispensables para hacking ético
+# Paso 3: Instalar herramientas indispensables para hacking ético
 mensaje "Instalando herramientas de hacking ético..."
 
-# Herramientas básicas
-dnf install -y nmap wireshark tcpdump net-tools whois traceroute bind-utils
+# Herramientas básicas disponibles en los repositorios base
+dnf install -y nmap wireshark tcpdump net-tools whois traceroute bind-utils python3 python3-pip git curl wget
 
-# Frameworks y herramientas avanzadas
-if ! dnf list installed metasploit-framework &>/dev/null; then
+# Instalar sqlmap manualmente desde GitHub
+if ! command -v sqlmap &>/dev/null; then
+    mensaje "Instalando sqlmap desde GitHub..."
+    git clone --depth 1 https://github.com/sqlmapproject/sqlmap.git /opt/sqlmap
+    if [ $? -ne 0 ]; then
+        log_error "Error al clonar el repositorio de sqlmap."
+    else
+        ln -s /opt/sqlmap/sqlmap.py /usr/local/bin/sqlmap
+        mensaje "sqlmap instalado correctamente."
+    fi
+fi
+
+# Instalar Metasploit Framework manualmente
+if ! command -v msfconsole &>/dev/null; then
     mensaje "Instalando Metasploit Framework..."
     curl https://raw.githubusercontent.com/rapid7/metasploit-omnibus/master/config/templates/metasploit-framework-wrappers/msfupdate.erb > msfinstall && \
     chmod +x msfinstall && \
     ./msfinstall
     if [ $? -ne 0 ]; then
         log_error "Error al instalar Metasploit Framework."
-    fi
-fi
-
-if ! dnf list installed sqlmap &>/dev/null; then
-    mensaje "Instalando sqlmap..."
-    git clone --depth 1 https://github.com/sqlmapproject/sqlmap.git /opt/sqlmap
-    if [ $? -ne 0 ]; then
-        log_error "Error al instalar sqlmap."
     else
-        ln -s /opt/sqlmap/sqlmap.py /usr/local/bin/sqlmap
+        mensaje "Metasploit Framework instalado correctamente."
     fi
 fi
 
+# Instalar herramientas adicionales disponibles en los repositorios base
 dnf install -y john hashcat hydra nikto aircrack-ng
-
-# Herramientas de desarrollo y scripting
-dnf install -y python3 python3-pip git curl wget
 
 # Instalar dependencias adicionales para algunas herramientas
 pip3 install --upgrade pip
 pip3 install requests paramiko scapy
 
-# Paso 5: Limpiar cachés y archivos temporales
+# Paso 4: Limpiar cachés y archivos temporales
 mensaje "Limpiando cachés y archivos temporales..."
 dnf clean all
 if [ $? -ne 0 ]; then
     log_error "Error al limpiar las cachés."
 fi
 
-# Paso 6: Verificar si hay paquetes obsoletos o huérfanos
+# Paso 5: Verificar si hay paquetes obsoletos o huérfanos
 mensaje "Buscando paquetes obsoletos o huérfanos..."
 package-cleanup --orphans
 if [ $? -ne 0 ]; then
     log_error "Error al buscar paquetes obsoletos."
 fi
 
-# Paso 7: Reiniciar servicios afectados por las actualizaciones
+# Paso 6: Reiniciar servicios afectados por las actualizaciones
 mensaje "Reiniciando servicios afectados por las actualizaciones..."
 needs-restarting -r
 if [ $? -eq 1 ]; then
@@ -120,7 +99,7 @@ else
     echo "No es necesario reiniciar el sistema en este momento."
 fi
 
-# Paso 8: Mostrar el estado final del sistema
+# Paso 7: Mostrar el estado final del sistema
 mensaje "Estado final del sistema después de la actualización:"
 uname -r
 dnf list updates
